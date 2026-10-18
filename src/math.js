@@ -79,3 +79,22 @@ export function sampleAccumulation(expression, kind, min, max, parameter = 1) {
   }
   return points;
 }
+
+// Keep the neighboring integer terms for segments crossing the viewport edges.
+// Offscreen terms that cannot be computed must not invalidate visible terms.
+export function sampleSequenceView(curve, min, max, parameter = 1, connected = false) {
+  const evaluate = (lo, hi) => curve.kind === 'recurrence'
+    ? sampleRecurrence(curve.expression, curve.initial ?? '1, 1', lo, hi, parameter)
+    : ['sum', 'product'].includes(curve.kind)
+      ? sampleAccumulation(curve.expression, curve.kind, lo, hi, parameter)
+      : sample(curve.expression, 'sequence', lo, hi, parameter);
+  const points = evaluate(min, max);
+  if (!connected) return points;
+  const neighbor = index => {
+    if (index < 1 || (curve.kind && curve.kind !== 'explicit' && index > 2000)) return [];
+    try { return evaluate(index, index); } catch { return []; }
+  };
+  if (!Number.isInteger(min)) points.unshift(...neighbor(Math.floor(min)));
+  if (!Number.isInteger(max)) points.push(...neighbor(Math.ceil(max)));
+  return points;
+}

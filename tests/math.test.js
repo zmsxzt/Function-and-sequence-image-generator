@@ -53,3 +53,27 @@ test('every sequence preset produces finite values within its default plot range
  }
  assert.deepEqual(sample('(n-1)%3+1','sequence',1,6).map(p=>p[1]),[1,2,3,1,2,3]);
 });
+
+import {sampleSequenceView} from '../src/math.js';
+test('zoomed connected sequences retain both endpoints outside the viewport',()=>{
+ const curve={expression:'1/n',kind:'explicit'};
+ assert.deepEqual(sampleSequenceView(curve,1.2,1.8,1,true),[[1,1],[2,0.5]]);
+ assert.deepEqual(sampleSequenceView(curve,1.2,1.8,1,false),[]);
+ assert.deepEqual(sampleSequenceView(curve,1,2,1,true),[[1,1],[2,0.5]]);
+ assert.deepEqual(sampleSequenceView(curve,-0.8,0.8,1,true),[[1,1]]);
+});
+test('neighboring segments work for recurrence, sums and products after panning',()=>{
+ assert.deepEqual(sampleSequenceView({expression:'a(n-1)+a(n-2)',kind:'recurrence',initial:'1, 1'},4.2,4.8,1,true),[[4,3],[5,5]]);
+ assert.deepEqual(sampleSequenceView({expression:'n',kind:'sum'},4.2,4.8,1,true),[[4,10],[5,15]]);
+ assert.deepEqual(sampleSequenceView({expression:'n',kind:'product'},4.2,4.8,1,true),[[4,24],[5,120]]);
+});
+test('offscreen overflow does not hide valid terms or bypass computation limits',()=>{
+ const factorial={expression:'n',kind:'product'};
+ const points=sampleSequenceView(factorial,169.5,170.5,1,true);
+ assert.deepEqual(points.map(p=>p[0]),[169,170]);
+ assert.throws(()=>sampleSequenceView(factorial,170,171,1,true));
+ const pointsAtLimit=sampleSequenceView({expression:'n',kind:'sum'},1999.5,2000.5,1,true);
+ assert.deepEqual(pointsAtLimit.map(p=>p[0]),[1999,2000]);
+ const withGap=sampleSequenceView({expression:'1/(n-2)'},1.5,2.5,1,true);
+ assert.ok(Number.isNaN(withGap[1][1]));
+});
