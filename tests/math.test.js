@@ -29,3 +29,27 @@ test('conic branch expressions satisfy their defining equations',()=>{
  const y=compileExpression('sqrt(x^2/4-1)')(4);assert.ok(Math.abs(16/4-y*y-1)<1e-10);
  assert.equal(compileExpression('2*sqrt(x)')(4)**2,16);
 });
+
+import {sampleAccumulation} from '../src/math.js';
+import {sequencePresets} from '../src/sequence-presets.js';
+test('partial sums and products accumulate from the first term',()=>{
+ assert.deepEqual(sampleAccumulation('1/n','sum',1,3),[[1,1],[2,1.5],[3,1+1/2+1/3]]);
+ assert.deepEqual(sampleAccumulation('n','product',4,6),[[4,24],[5,120],[6,720]]);
+ assert.deepEqual(sampleAccumulation('a*n','sum',2,3,2),[[2,6],[3,12]]);
+ assert.ok(Math.abs(sampleAccumulation('1/(n*(n+1))','sum',1,20).at(-1)[1]-20/21)<1e-12);
+});
+test('accumulations fail clearly on invalid terms, overflow and excess computation',()=>{
+ assert.throws(()=>sampleAccumulation('1/(n-2)','sum',1,3));
+ assert.throws(()=>sampleAccumulation('n','product',1,171));
+ assert.throws(()=>sampleAccumulation('n','sum',1999,2001));
+ assert.throws(()=>sampleAccumulation('n','unknown',1,2));
+});
+test('every sequence preset produces finite values within its default plot range',()=>{
+ for(const p of sequencePresets){
+  const kind=p[8]??(p[6]?'recurrence':'explicit'),[xmin,xmax,ymin,ymax]=p[3];
+  const points=kind==='recurrence'?sampleRecurrence(p[2][0],p[6],xmin,xmax):kind==='explicit'?sample(p[2][0],'sequence',xmin,xmax):sampleAccumulation(p[2][0],kind,xmin,xmax);
+  assert.ok(points.length>0,p[0]);
+  assert.ok(points.every(([n,v])=>Number.isInteger(n)&&Number.isFinite(v)&&v>=ymin&&v<=ymax),p[0]);
+ }
+ assert.deepEqual(sample('(n-1)%3+1','sequence',1,6).map(p=>p[1]),[1,2,3,1,2,3]);
+});

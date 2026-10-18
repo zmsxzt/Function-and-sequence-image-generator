@@ -62,3 +62,20 @@ export function sampleRecurrence(expression, initialText, min, max, parameter = 
   for (let n = start; n <= end; n++) points.push([n, values[n-1]]);
   return points;
 }
+
+export function sampleAccumulation(expression, kind, min, max, parameter = 1) {
+  if (!['sum', 'product'].includes(kind)) throw new Error('不支持的累积类型');
+  const end = Math.floor(max), start = Math.max(1, Math.ceil(min));
+  if (end > 2000) throw new Error('累积数列最多计算至第 2000 项');
+  const fn = compileExpression(expression);
+  let value = kind === 'sum' ? 0 : 1;
+  const points = [];
+  for (let n = 1; n <= end; n++) {
+    const term = fn(n, parameter);
+    value = kind === 'sum' ? value + term : value * term;
+    if (!Number.isFinite(term) || !Number.isFinite(value))
+      throw new Error(`第 ${n} 项不是有限实数，请缩小范围或检查公式`);
+    if (n >= start) points.push([n, value]);
+  }
+  return points;
+}
