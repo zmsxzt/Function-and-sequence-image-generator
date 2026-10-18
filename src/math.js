@@ -1,12 +1,12 @@
 import { parse } from 'mathjs';
 const allowedFunctions = new Set(['sin','cos','tan','asin','acos','atan','sinh','cosh','tanh','sqrt','abs','log','log10','exp','floor','ceil','round','min','max']);
-export function compileExpression(expression) {
+export function compileExpression(expression, extraSymbols = []) {
   if (!expression.trim()) throw new Error('请输入表达式');
   if (expression.length > 300) throw new Error('表达式不能超过 300 个字符');
   const tree = parse(expression);
   tree.traverse(node => {
     if (!['OperatorNode','FunctionNode','SymbolNode','ConstantNode','ParenthesisNode'].includes(node.type)) throw new Error('只支持数学运算和常用函数');
-    if (node.isSymbolNode && !['x','n','a','pi','e',...allowedFunctions].includes(node.name)) throw new Error(`不支持的变量：${node.name}`);
+    if (node.isSymbolNode && !['x','n','a','pi','e',...allowedFunctions,...extraSymbols].includes(node.name)) throw new Error(`不支持的变量：${node.name}`);
     if (node.isFunctionNode && !allowedFunctions.has(node.fn.name)) throw new Error('不支持此函数');
     if (node.isOperatorNode && !['+','-','*','/','^','%','!'].includes(node.op)) throw new Error('不支持此运算');
     if (node.isOperatorNode && node.op === '!') throw new Error('请使用普通四则运算或幂运算');
@@ -29,4 +29,36 @@ export function sample(expression, mode, min, max, a = 1, count = 1600) {
 }
 export function validateRange(min,max) {
   if (!Number.isFinite(min) || !Number.isFinite(max) || min >= max) throw new Error('范围必须为有限数字，且最小值小于最大值');
+}
+
+// Compute from the initial terms even when the visible range starts later.
+export function sampleRecurrence(expression, initialText, min, max, parameter = 1) {
+  const initial = initialText.split(/[,，\s]+/).filter(Boolean).map(Number);
+  if (!initial.length || initial.length > 20 || initial.some(v => !Number.isFinite(v)))
+    throw new Error('请输入 1 至 20 个有限初始值，用逗号分隔');
+  const offsets = new Set();
+  const normalized = expression.replace(/a\s*(?:\(\s*n\s*-\s*(\d+)\s*\)|\[\s*n\s*-\s*(\d+)\s*\]|_?\{\s*n\s*-\s*(\d+)\s*\})/g, (_, a, b, c) => {
+    const offset = Number(a ?? b ?? c);
+    if (offset < 1 || offset > initial.length) throw new Error('引用的前项超出初始值数量，请补充初始项');
+    offsets.add(offset);
+    return `prev${offset}`;
+  });
+  if (!offsets.size) throw new Error('递推式请使用 a(n-1)、a(n-2) 等前项引用');
+  // Reuse the same restricted parser, then substitute previous terms as constants.
+  compileExpression(normalized, [...offsets].map(k => `prev${k}`));
+  const end = Math.floor(max), start = Math.max(1, Math.ceil(min));
+  if (end > 2000) throw new Error('递推数列最多计算至第 2000 项');
+  const values = [...initial];
+  // Compile once with the previous-term symbols supplied through scope.
+  const compiled = parse(normalized).compile();
+  for (let n = initial.length + 1; n <= end; n++) {
+    const scope = {n, x:n, a:parameter};
+    offsets.forEach(k => { scope[`prev${k}`] = values[n-k-1]; });
+    const value = compiled.evaluate(scope);
+    if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`第 ${n} 项不是有限实数，请缩小范围或检查递推式`);
+    values.push(value);
+  }
+  const points = [];
+  for (let n = start; n <= end; n++) points.push([n, values[n-1]]);
+  return points;
 }
